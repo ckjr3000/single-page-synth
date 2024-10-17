@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Single Page Modular Synthesiser</title>
+    <style>
+        * {
+            text-align: center;
+        }
+
+        button, input {
+            color: black;
+            border: 1px solid black;
+            background-color: white;
+            padding: 5px;
+        }
+
+        nav {
+            text-align: center;
+        }
+
+        .channel {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-evenly;
+        }
+
+        #controls {
+            margin: 20px 0;
+        }
+
+        .module {
+            display: flex;
+            flex-direction: column;
+            margin: 2px;
+            padding: 3px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+    </style>
+</head>
+<body>
+    <header>
+        <button id="play">Start Audio Context</button>
+    </header>
+
+    <div id="controls" class="hidden">
+
+        Oscillator 1.
+        <div class="output channel">
+            <div class="module volume">
+                Gain
+                <input class="vol" type="range" min="0" max="1" step="any" value="0">
+            </div>
+            <div class="module freq">
+                Frequency
+                <input type="range" min="50" max="1000" step="any" value="250">
+            </div>
+            <div class="module shape">
+                Wave Shape
+                <select class="wave-shape" name="wave-shape">
+                    <option value="sine">Sine</option>
+                    <option value="square">Square</option>
+                    <option value="triangle">Triangle</option>
+                    <option value="sawtooth">Sawtooth</option>
+                </select>
+            </div>
+            <div class="module cut-off">
+                Filters
+                <select class="filter-type" name="filter-type" value="bandpass">
+                    <option value="lowpass">Low Pass</option>
+                    <option value="highpass">High Pass</option>
+                    <option value="bandpass">Band Pass</option>
+                </select>
+                <input class="cut-off-freq" type="range" min="50" max="1000" step="any" value="500">
+            </div>
+            <div class="module pan">
+                Pan
+                <input type="range" min="-1" max="1" step="any" value="0">
+            </div>
+            <div class="module q">
+                Q Factor
+                <input type="range" min="0" max="100" step="any">
+            </div>
+            <div class="module shaper">
+                Distortion
+                <input type="range" class="input-1" value="-1" min="-100" max="-1" step="any">
+                <input type="range" class="input-2" value="1" min="1" max="100" step="any">
+            </div>
+            <div class="module delay">
+                Delay
+                <input type="range" min="0" max="10" step="0.5">
+            </div>
+        </div>
+        <!-- copy and paste for more! -->
+         
+        <div class="control channel">
+            <div class="module lfo">
+                LFO
+                <input type="range" min="1" max="2000" step="any">
+                <div class="checkboxes">
+                    1.
+                    <input type="checkbox" value="1" name="checkboxes">
+                </div>
+                <select class="ctrl-param" name="ctrl-param">
+                    
+                    <option value="frequency">Frequency</option>
+                    <option value="pan">Pan</option>
+                    <option value="q">Q Factor</option>
+                </select>
+                <button class="connect">Connect</button>
+                <button class="disconnect">Disconnect</button>
+            </div>
+            <!-- copy and paste for more! -->
+        </div>
+    </div>
+
+    <script>
+        // Initialise audio context
+        const ctx = new AudioContext();
+
+        // create arrays to store all nodes in the signal chain
+        let oscillators = [];
+        let gainNodes = [];
+        let filters = [];
+        let stereoPannerNodes = [];
+        let waveShaperNodes = [];
+        let delayNodes = [];
+
+        let numberOfOscillators = 8;
+        let startFrequency = 250;
+
+        // User gesture to start audio context
+        const play = document.getElementById('play');
+        play.addEventListener("click", () => {
+            for(let i = 0; i < numberOfOscillators; i++){
+                // create oscillators 
+                oscillators[i] = ctx.createOscillator();
+                oscillators[i].frequency.setValueAtTime(startFrequency, ctx.currentTime);
+
+                // create gain nodes and set them to 0
+                gainNodes[i] = ctx.createGain();
+                gainNodes[i].gain.setValueAtTime(0, ctx.currentTime);
+
+                // create wave shaper nodes
+                // https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/createWaveShaper
+                waveShaperNodes[i] = ctx.createWaveShaper();
+
+                // create delay nodes
+                delayNodes[i] = ctx.createDelay();
+
+                // create stereo panner nodes
+                stereoPannerNodes[i] = ctx.createStereoPanner();
+
+                // create filter nodes
+                filters[i] = ctx.createBiquadFilter();
+
+                // chain them all together
+                oscillators[i].connect(gainNodes[i]);
+                gainNodes[i].connect(waveShaperNodes[i]);
+                waveShaperNodes[i].connect(delayNodes[i]);
+                delayNodes[i].connect(stereoPannerNodes[i]);
+                stereoPannerNodes[i].connect(filters[i]);
+                filters[i].connect(ctx.destination);
+
+                // start the oscillators
+                oscillators[i].start();
+            }
+
+            // show audio controls and hide start context button
+            const controls = document.getElementById('controls');
+            controls.classList.remove('hidden');
+            play.classList.add('hidden');
+        })
+        
+        // Direct Oscillator Controls
+        const volCtrls = document.getElementsByClassName('vol');
+        for (let i = 0; i < volCtrls.length; i++) {
+            volCtrls[i].addEventListener("input", (e) => {
+                const gainValue = e.target.value;
+                gainNodes[i].gain.linearRampToValueAtTime(gainValue, ctx.currentTime + 0.05);
+                
+                const outputChannels = document.getElementsByClassName('output');
+
+                if (gainValue > 0) {
+                    outputChannels[i].style = "border: 2px solid black";
+                } else {
+                    outputChannels[i].style = "border: none";
+                }
+            });
+        }
+
+
+        const freqCtrls = document.getElementsByClassName('freq');
+        for(let i = 0; i < freqCtrls.length; i++){
+            freqCtrls[i].addEventListener("input", (e) => {
+                oscillators[i].frequency.linearRampToValueAtTime(e.target.value, ctx.currentTime + 0.05);
+            })
+        } 
+
+        const shapeCtrls = document.getElementsByClassName('shape');
+        for(let i = 0; i < shapeCtrls.length; i++){
+            shapeCtrls[i].addEventListener("change", (e) => {
+                oscillators[i].type = e.target.value;
+            })
+        }
+        
+        const filterCtrls = document.getElementsByClassName('filter-type');
+        const filterCutOffCtrls = document.getElementsByClassName('cut-off-freq');
+        for(let i = 0; i < filterCtrls.length; i++){
+            filterCtrls[i].addEventListener("change", (e) => {
+                filters[i].type = e.target.value;
+                filters[i].frequency.setValueAtTime(filterCutOffCtrls[i].value, ctx.currentTime + 0.05);
+            })
+            filterCutOffCtrls[i].addEventListener("input", (e) => {
+                filters[i].type = filterCtrls[i].value;
+                filters[i].frequency.setValueAtTime(e.target.value, ctx.currentTime + 0.05);
+            })
+        }
+
+        const panCtrls = document.getElementsByClassName('pan');
+        for(let i = 0; i < panCtrls.length; i++){
+            panCtrls[i].addEventListener("input", (e) => {
+                stereoPannerNodes[i].pan.setValueAtTime(e.target.value, ctx.currentTime + 0.05);
+            })
+        }
+
+        const qCtrls = document.getElementsByClassName('q');
+        for(let i = 0; i < qCtrls.length; i++){
+            qCtrls[i].addEventListener("input", (e) => {
+                filters[i].Q.value = e.target.value;
+            })
+        }
+
+        const shaperCtrls1 = document.getElementsByClassName('input-1');
+        const shaperCtrls2 = document.getElementsByClassName('input-2');
+        for(let i = 0; i < shaperCtrls1.length; i++){
+            shaperCtrls1[i].addEventListener("input", (e) => {
+                // calculate the distortion curve based on the value of both inputs
+                let curve = new Float32Array([e.target.value, shaperCtrls2[i].value]);
+                waveShaperNodes[i].curve = curve;
+            })
+        }
+
+        for(let i = 0; i < shaperCtrls1.length; i++){
+            shaperCtrls2[i].addEventListener("input", (e) => {
+                let curve = new Float32Array([shaperCtrls1[i].value, e.target.value]);
+                waveShaperNodes[i].curve = curve;
+            })
+        }
+
+        const delayCtrls = document.getElementsByClassName('delay');
+        for(let i = 0; i < delayCtrls.length; i++){
+            delayCtrls[i].addEventListener("input", (e) => {
+                delayNodes[i].delayTime.linearRampToValueAtTime(e.target.value, ctx.currentTime + 0.05);
+            })
+        }
+
+        // LFOs
+        const lfos = document.querySelectorAll('.lfo');
+        let lfoOscillators = [];
+        let lfoGainNodes = [];
+
+        lfos.forEach((module, i) => {
+        const connectBtn = module.querySelector('button[class="connect"]');
+        const disconnectBtn = module.querySelector('button[class="disconnect"]');
+
+        // Array to store all modulated modules for each LFO
+        let modulatedModules = [];
+
+        connectBtn.addEventListener('click', function () {
+
+            lfoOscillators[i] = ctx.createOscillator();
+            lfoGainNodes[i] = ctx.createGain();
+
+            lfoOscillators[i].frequency.setValueAtTime(5, ctx.currentTime);
+            lfoGainNodes[i].gain.setValueAtTime(50, ctx.currentTime);
+
+            const modulationVal = module.querySelector('input[type="range"]').value;
+            const checkboxes = module.querySelectorAll('input[type="checkbox"]:checked');
+            const modulationParam = module.querySelector('select.ctrl-param').value;
+
+            // Reset modulated modules before each connection to avoid leftover highlights
+            modulatedModules = [];
+
+            // Iterate through all checked checkboxes (channels) and apply modulation
+            checkboxes.forEach(checkbox => {
+                const channelIndex = parseInt(checkbox.value - 1);
+                const channel = document.querySelectorAll('.output.channel')[channelIndex];
+                let targetModule = null;
+
+                // Switch statement to determine which module is being modulated
+                switch(modulationParam) {
+                    case 'volume':
+                        targetModule = channel.querySelector('.volume');
+                        lfoGainNodes[i].gain.setValueAtTime(modulationVal, ctx.currentTime); 
+                        lfoGainNodes[i].connect(gainNodes[channelIndex].gain);
+                        break;
+                    case 'frequency':
+                        targetModule = channel.querySelector('.freq');
+                        lfoGainNodes[i].gain.setValueAtTime(modulationVal, ctx.currentTime); 
+                        lfoGainNodes[i].connect(oscillators[channelIndex].frequency);
+                        break;
+                    case 'pan':
+                        targetModule = channel.querySelector('.pan');
+                        lfoGainNodes[i].gain.setValueAtTime(modulationVal, ctx.currentTime); 
+                        lfoGainNodes[i].connect(stereoPannerNodes[channelIndex].pan);
+                        break;
+                    case 'q':
+                        targetModule = channel.querySelector('.q');
+                        lfoGainNodes[i].gain.setValueAtTime(modulationVal, ctx.currentTime); 
+                        lfoGainNodes[i].connect(filters[channelIndex].Q);
+                        break;
+                }
+
+                if (targetModule) {
+                    targetModule.style.border = "2px solid black";
+                    modulatedModules.push(targetModule); 
+                }
+            });
+
+            lfoOscillators[i].connect(lfoGainNodes[i]);
+            lfoOscillators[i].start();
+        });
+
+        disconnectBtn.addEventListener('click', function () {
+            lfoOscillators[i].stop();
+
+            modulatedModules.forEach(targetModule => {
+                if (targetModule) {
+                    targetModule.style.border = "none";
+                }
+            });
+
+            modulatedModules = [];
+        });
+    });
+    </script>
+</body>
+</html>
